@@ -26,7 +26,10 @@ def find_place(name):
     settings = {"name": name, "count": 1, "countryCode": "IS"}
     response = httpx.get(GEO_URL, params=settings, timeout=10)
     response.raise_for_status()
-    place = response.json()["results"][0]
+    data = response.json()
+    if "results" not in data:
+        return None
+    place = data["results"][0]
     return place["latitude"], place["longitude"]
 
 
@@ -49,6 +52,10 @@ if __name__ == "__main__":
     time, kp_value = get_latest_kp(get_kp())
     print(f"Latest Kp: {kp_value} at {time}")
 
-    lat, lon = find_place("Reykjanesbaer")
-    weather = get_weather(lat, lon)
-    print("Cloud at 20:00:", weather["hourly"]["cloud_cover"][20])
+    place= find_place("Reykjanesbaer")
+    if place is None:
+        print(f"Try another place in iceland")
+    else:
+        lat, lon = place
+        weather = get_weather(lat, lon)
+        print("Cloud at 20:00:", weather["hourly"]["cloud_cover"][20])
