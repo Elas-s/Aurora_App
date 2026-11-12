@@ -12,7 +12,7 @@ KP_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
 GEO_URL = "https://geocoding-api.open-meteo.com/v1/search"
 WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
 STATIONS_URL = "https://api.vedur.is/weather/stations"
-
+OBSERVATIONS_URL = "https://api.vedur.is/weather/observations/aws/10min/latest"
 # ---------------- Aurora (Kp) ----------------
 def get_kp():
     """Fetch the last 7.5 days of Kp readings from NOAA."""
@@ -76,7 +76,25 @@ def find_nearest_station(lat,long,stations):
             nearest = station
     return nearest, best
 
+#------------Latest_observations-------------------
+def get_latest_observation():
+    """Fetch the latest observation in all the stations."""
+    response = httpx.get(OBSERVATIONS_URL, timeout=10)
+    response.raise_for_status()
+    return response.json()
 
+#--------Filter_reporting_stations------------------
+def filter_reporting_stations(stations,observations):
+    """Keep only the stations that sent an observation."""
+    reporting_ids = []
+    for obs in observations:
+        reporting_ids.append(obs["station"])
+
+    reporting_stations = []
+    for station in stations:
+        if station["station"] in reporting_ids:
+            reporting_stations.append(station)
+    return reporting_stations
 
 
 #--------------------------------------------
@@ -93,11 +111,14 @@ if __name__ == "__main__":
     else:
         lat, lon = place
         weather = get_weather(lat, lon)
-        print("Cloud at 20:00:", weather["hourly"]["cloud_cover"][20])
 
         stations = get_stations()
-        print(len(stations), stations[0]["name"])
+        latest_observation = get_latest_observation()
+        reporting = filter_reporting_stations(stations, latest_observation)
 
-        closest_station, closest_distance = find_nearest_station(lat,lon,stations)
+        closest_station, closest_distance = find_nearest_station(lat,lon,reporting)
+
         print(f"Nearest Station: {closest_station['name']},"
               f" Distance: {closest_distance:.1f}km")
+        print(closest_station["station"])
+
