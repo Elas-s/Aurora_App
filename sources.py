@@ -1,5 +1,12 @@
 import httpx
+from math import radians, sin , cos, asin, sqrt
 
+#------------haversine formula-----------
+def distance_km(lat1, lon1, lat2, lon2):
+    """Distance in km between two points on Earth (haversine formula)."""
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    a = sin((lat2 - lat1) / 2) ** 2 + cos(lat1) * cos(lat2) * sin((lon2 - lon1) / 2) ** 2
+    return 6371 * 2 * asin(sqrt(a))
 # ---------------- URLs ----------------
 KP_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
 GEO_URL = "https://geocoding-api.open-meteo.com/v1/search"
@@ -57,10 +64,22 @@ def get_stations():
     response = httpx.get(STATIONS_URL, params=settings, timeout=10)
     response.raise_for_status()
     return response.json()
+#------------Nearest_station---------------------
+def find_nearest_station(lat,long,stations):
+    """Return (station, distance_km) of the station closest to (lat, lon)."""
+    nearest = None
+    best = float("inf")  # "infinity": any real distance beats it
+    for station in stations:
+        d = distance_km(lat,long,station["lat"],station["lon"])
+        if d < best:
+            best = d
+            nearest = station
+    return nearest, best
 
 
 
 
+#--------------------------------------------
 
 
 
@@ -76,5 +95,9 @@ if __name__ == "__main__":
         weather = get_weather(lat, lon)
         print("Cloud at 20:00:", weather["hourly"]["cloud_cover"][20])
 
-    stations = get_stations()
-    print(len(stations), stations[0]["name"])
+        stations = get_stations()
+        print(len(stations), stations[0]["name"])
+
+        closest_station, closest_distance = find_nearest_station(lat,lon,stations)
+        print(f"Nearest Station: {closest_station['name']},"
+              f" Distance: {closest_distance:.1f}km")
