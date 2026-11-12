@@ -96,7 +96,13 @@ def filter_reporting_stations(stations,observations):
             reporting_stations.append(station)
     return reporting_stations
 
-
+#------------Find_observation-------------------
+def find_observation(station_id, observations):
+    """Return the observation for one station, or None if it has none."""
+    for obs in observations:
+        if obs["station"] == station_id:
+            return obs
+    return None
 #--------------------------------------------
 
 
@@ -118,7 +124,11 @@ if __name__ == "__main__":
 
         closest_station, closest_distance = find_nearest_station(lat,lon,reporting)
 
-        print(f"Nearest Station: {closest_station['name']},"
-              f" Distance: {closest_distance:.1f}km")
-        print(closest_station["station"])
+        obs = find_observation(closest_station["station"], latest_observation)
+        if obs is None:
+            print("No measurements right now")
+        else:
+            print(f"Right now: {obs['t']}°C, wind {obs['f']} m/s ({obs['d_txt']})")
+
+
 
