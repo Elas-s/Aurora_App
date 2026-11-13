@@ -11,6 +11,7 @@ GEO_URL = "https://geocoding-api.open-meteo.com/v1/search"
 WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
 STATIONS_URL = "https://api.vedur.is/weather/stations"
 OBSERVATIONS_URL = "https://api.vedur.is/weather/observations/aws/10min/latest"
+OVATION_URL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 
 
 # ---------------- Helpers ----------------
@@ -33,6 +34,24 @@ def get_latest_kp(readings):
     """Return (time, Kp) of the newest reading."""
     latest = readings[-1]
     return latest["time_tag"], latest["Kp"]
+
+
+# ---------------- Aurora map (OVATION) ----------------
+def get_ovation():
+    """Fetch NOAA's latest aurora chance grid for the whole planet."""
+    response = httpx.get(OVATION_URL, timeout=10)
+    response.raise_for_status()
+    return response.json()
+
+
+def find_aurora_chance(lat, lon, ovation):
+    """Return the aurora chance (0-100) at the grid point nearest (lat, lon)."""
+    grid_lon = round(lon) % 360  # NOAA longitudes go 0-359, not -180 to 180
+    grid_lat = round(lat)
+    for point in ovation["coordinates"]:  # each point is [lon, lat, chance]
+        if point[0] == grid_lon and point[1] == grid_lat:
+            return point[2]
+    return None
 
 
 # ---------------- Place -> coordinates ----------------
@@ -130,6 +149,10 @@ if __name__ == "__main__":
         hour = datetime.now().hour  # the index in the hourly lists is the hour
         cloud_now = weather["hourly"]["cloud_cover"][hour]
 
+        # Aurora: NOAA OVATION chance at our grid point
+        ovation = get_ovation()
+        chance = find_aurora_chance(lat, lon, ovation)
+
         # Temperature and wind: nearest station that actually reports
         stations = get_stations()
         observations = get_latest_observations()
@@ -138,6 +161,7 @@ if __name__ == "__main__":
         obs = find_observation(station["station"], observations)
 
         print(f"Right now in {PLACE}:")
+        print(f"  Aurora chance: {chance}%")
         print(f"  Cloud: {cloud_now}%")
         if obs is None:
             print("  No station measurements right now")
