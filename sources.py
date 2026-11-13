@@ -73,8 +73,11 @@ def get_dark_window(lat, lon):
     observer = Observer(latitude=lat, longitude=lon)
     today = date.today()
     tomorrow = today + timedelta(days=1)
-    start = dusk(observer, today, depression=12)
-    end = dawn(observer, tomorrow, depression=12)
+    try:
+        start = dusk(observer, today, depression=12)
+        end = dawn(observer, tomorrow, depression=12)
+    except ValueError:
+        return None
     return start, end
 
 
@@ -180,8 +183,7 @@ if __name__ == "__main__":
         # Sun position right now in the sky
         sun = get_sun_elevation(lat, lon)
         dark = is_dark(sun)
-        start, end = get_dark_window(lat, lon)
-
+        window = get_dark_window(lat, lon)
 
         # Temperature and wind: nearest station that actually reports
         stations = get_stations()
@@ -198,7 +200,12 @@ if __name__ == "__main__":
 
         print(f"  Sun elevation: {sun:.1f}°")
         print(f"  Dark enough: {dark}")
-        print(f"  Dark tonight: {start:%H:%M} to {end:%H:%M}")
+
+        if window is None:
+            print("  No darkness tonight")
+        else:
+            start, end = window
+            print(f"  Dark tonight: {start:%H:%M} to {end:%H:%M}")
 
 
 
