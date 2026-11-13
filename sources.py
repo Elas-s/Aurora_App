@@ -1,13 +1,12 @@
 """Fetch the data the aurora app needs from NOAA, Open-Meteo and the Icelandic Met Office."""
 
-from datetime import datetime
-from math import asin, cos, radians, sin, sqrt
 from datetime import date, datetime, timedelta, timezone
-
-from astral import Observer
-from astral.sun import dawn, dusk, elevation
+from math import asin, cos, radians, sin, sqrt
 
 import httpx
+from astral import Observer
+from astral.moon import phase
+from astral.sun import dawn, dusk, elevation
 
 # ---------------- URLs ----------------
 KP_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
@@ -57,19 +56,22 @@ def find_aurora_chance(lat, lon, ovation):
             return point[2]
     return None
 
+
 # ---------------- Darkness (Sun & Moon) ----------------
-def get_sun_elevation(lat,lon):
+def get_sun_elevation(lat, lon):
     """Return how many degrees the sun is above (+) or below (-) the horizon now."""
-    observer = Observer(latitude=lat , longitude=lon)
+    observer = Observer(latitude=lat, longitude=lon)
     now = datetime.now(timezone.utc)
     return elevation(observer, now)
+
 
 def is_dark(sun_elevation):
     """Return True if the sun is low enough (below -12°) for aurora."""
     return sun_elevation < -12
 
+
 def get_dark_window(lat, lon):
-    """Return (start, end) of tonight's dark window, in UTC."""
+    """Return (start, end) of tonight's dark window in UTC, or None in summer."""
     observer = Observer(latitude=lat, longitude=lon)
     today = date.today()
     tomorrow = today + timedelta(days=1)
@@ -77,8 +79,18 @@ def get_dark_window(lat, lon):
         start = dusk(observer, today, depression=12)
         end = dawn(observer, tomorrow, depression=12)
     except ValueError:
-        return None
+        return None  # summer: the sun never gets 12° below the horizon
     return start, end
+
+
+def get_moon_phase():
+    """Return today's moon phase: 0 = new moon, 14 = full moon, 28 = new again."""
+    return phase(date.today())
+
+
+def moon_is_bright(moon_phase):
+    """Return True around full moon (phase 10-18), when moonlight hides faint aurora."""
+    return 10 <= moon_phase <= 18
 
 
 # ---------------- Place -> coordinates ----------------
@@ -180,10 +192,14 @@ if __name__ == "__main__":
         ovation = get_ovation()
         chance = find_aurora_chance(lat, lon, ovation)
 
-        # Sun position right now in the sky
+        # Darkness: where the sun is now, and tonight's dark window
         sun = get_sun_elevation(lat, lon)
         dark = is_dark(sun)
         window = get_dark_window(lat, lon)
+
+        # Moon: a bright moon washes out faint aurora
+        moon = get_moon_phase()
+        bright_moon = moon_is_bright(moon)
 
         # Temperature and wind: nearest station that actually reports
         stations = get_stations()
@@ -193,31 +209,19 @@ if __name__ == "__main__":
         obs = find_observation(station["station"], observations)
 
         print(f"Right now in {PLACE}:")
-
         print(f"  Aurora chance: {chance}%")
-
         print(f"  Cloud: {cloud_now}%")
-
         print(f"  Sun elevation: {sun:.1f}°")
         print(f"  Dark enough: {dark}")
-
         if window is None:
             print("  No darkness tonight")
         else:
             start, end = window
             print(f"  Dark tonight: {start:%H:%M} to {end:%H:%M}")
-
-
-
+        print(f"  Moon phase: {moon:.1f} (bright moon: {bright_moon})")
         if obs is None:
             print("  No station measurements right now")
         else:
             print(f"  Temperature: {obs['t']}°C")
             print(f"  Wind: {obs['f']} m/s ({obs['d_txt']})")
             print(f"  Measured at {station['name']}, {distance:.1f} km away")
-
-
-
-
-
-
