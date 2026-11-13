@@ -2,10 +2,10 @@
 
 from datetime import datetime
 from math import asin, cos, radians, sin, sqrt
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from astral import Observer
-from astral.sun import elevation
+from astral.sun import dawn, dusk, elevation
 
 import httpx
 
@@ -67,6 +67,15 @@ def get_sun_elevation(lat,lon):
 def is_dark(sun_elevation):
     """Return True if the sun is low enough (below -12°) for aurora."""
     return sun_elevation < -12
+
+def get_dark_window(lat, lon):
+    """Return (start, end) of tonight's dark window, in UTC."""
+    observer = Observer(latitude=lat, longitude=lon)
+    today = date.today()
+    tomorrow = today + timedelta(days=1)
+    start = dusk(observer, today, depression=12)
+    end = dawn(observer, tomorrow, depression=12)
+    return start, end
 
 
 # ---------------- Place -> coordinates ----------------
@@ -171,6 +180,8 @@ if __name__ == "__main__":
         # Sun position right now in the sky
         sun = get_sun_elevation(lat, lon)
         dark = is_dark(sun)
+        start, end = get_dark_window(lat, lon)
+
 
         # Temperature and wind: nearest station that actually reports
         stations = get_stations()
@@ -180,10 +191,14 @@ if __name__ == "__main__":
         obs = find_observation(station["station"], observations)
 
         print(f"Right now in {PLACE}:")
+
         print(f"  Aurora chance: {chance}%")
+
         print(f"  Cloud: {cloud_now}%")
+
         print(f"  Sun elevation: {sun:.1f}°")
         print(f"  Dark enough: {dark}")
+        print(f"  Dark tonight: {start:%H:%M} to {end:%H:%M}")
 
 
 
