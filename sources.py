@@ -2,6 +2,10 @@
 
 from datetime import datetime
 from math import asin, cos, radians, sin, sqrt
+from datetime import datetime, timezone
+
+from astral import Observer
+from astral.sun import elevation
 
 import httpx
 
@@ -52,6 +56,17 @@ def find_aurora_chance(lat, lon, ovation):
         if point[0] == grid_lon and point[1] == grid_lat:
             return point[2]
     return None
+
+# ---------------- Darkness (Sun & Moon) ----------------
+def get_sun_elevation(lat,lon):
+    """Return how many degrees the sun is above (+) or below (-) the horizon now."""
+    observer = Observer(latitude=lat , longitude=lon)
+    now = datetime.now(timezone.utc)
+    return elevation(observer, now)
+
+def is_dark(sun_elevation):
+    """Return True if the sun is low enough (below -12°) for aurora."""
+    return sun_elevation < -12
 
 
 # ---------------- Place -> coordinates ----------------
@@ -153,6 +168,10 @@ if __name__ == "__main__":
         ovation = get_ovation()
         chance = find_aurora_chance(lat, lon, ovation)
 
+        # Sun position right now in the sky
+        sun = get_sun_elevation(lat, lon)
+        dark = is_dark(sun)
+
         # Temperature and wind: nearest station that actually reports
         stations = get_stations()
         observations = get_latest_observations()
@@ -163,9 +182,20 @@ if __name__ == "__main__":
         print(f"Right now in {PLACE}:")
         print(f"  Aurora chance: {chance}%")
         print(f"  Cloud: {cloud_now}%")
+        print(f"  Sun elevation: {sun:.1f}°")
+        print(f"  Dark enough: {dark}")
+
+
+
         if obs is None:
             print("  No station measurements right now")
         else:
             print(f"  Temperature: {obs['t']}°C")
             print(f"  Wind: {obs['f']} m/s ({obs['d_txt']})")
             print(f"  Measured at {station['name']}, {distance:.1f} km away")
+
+
+
+
+
+
