@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 
-from sources import find_place
+from sources import find_place, get_conditions
 
 app = FastAPI()
 
@@ -21,3 +21,11 @@ def get_place(name: str):
 
     lat, lon = coordinates
     return {"name": name, "lat": lat, "lon": lon}
+
+@app.get("/conditions")
+def conditions(place: str):
+    coordinates = find_place(place)
+    if coordinates is None:
+        raise HTTPException(status_code=404, detail=f"Couldn't find {place} in Iceland.")
+    lat, lon = coordinates
+    return get_conditions(lat, lon)
