@@ -185,7 +185,7 @@ if __name__ == "__main__":
 
         # Clouds: Open-Meteo forecast for the current hour
         weather = get_weather(lat, lon)
-        hour = datetime.now().hour  # the index in the hourly lists is the hour
+        hour = datetime.now(timezone.utc).hour  # Iceland time = UTC all year
         cloud_now = weather["hourly"]["cloud_cover"][hour]
 
         # Aurora: NOAA OVATION chance at our grid point
@@ -206,7 +206,11 @@ if __name__ == "__main__":
         observations = get_latest_observations()
         reporting = filter_reporting_stations(stations, observations)
         station, distance = find_nearest_station(lat, lon, reporting)
-        obs = find_observation(station["station"], observations)
+
+        if station is None:
+            obs = None
+        else:
+            obs = find_observation(station["station"], observations)
 
         print(f"Right now in {PLACE}:")
         print(f"  Aurora chance: {chance}%")
