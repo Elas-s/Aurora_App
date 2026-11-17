@@ -170,6 +170,61 @@ def find_observation(station_id, observations):
     return None
 
 
+# ---------------- Everything at once ----------------
+def get_conditions(lat, lon):
+    """Return all aurora conditions for one place as a dict."""
+    # Clouds: Open-Meteo forecast for the current hour
+    weather = get_weather(lat, lon)
+    hour = datetime.now(timezone.utc).hour  # Iceland time = UTC all year
+    cloud_now = weather["hourly"]["cloud_cover"][hour]
+
+    # Aurora: NOAA OVATION chance at our grid point
+    ovation = get_ovation()
+    chance = find_aurora_chance(lat, lon, ovation)
+
+    # Darkness: where the sun is now, and tonight's dark window
+    sun = get_sun_elevation(lat, lon)
+    dark = is_dark(sun)
+    window = get_dark_window(lat, lon)
+
+    # Moon: a bright moon washes out faint aurora
+    moon = get_moon_phase()
+    bright_moon = moon_is_bright(moon)
+
+    # Temperature and wind: nearest station that actually reports
+    stations = get_stations()
+    observations = get_latest_observations()
+    reporting = filter_reporting_stations(stations, observations)
+    station, distance = find_nearest_station(lat, lon, reporting)
+
+    if station is None:
+        obs = None
+    else:
+        obs = find_observation(station["station"], observations)
+
+    if obs is None:
+        station_info = None
+    else:
+        station_info = {
+            "name": station["name"],
+            "distance_km": round(distance, 1),
+            "temperature": obs["t"],
+            "wind": obs["f"],
+            "wind_direction": obs["d_txt"],
+        }
+
+    return {
+        "aurora_chance": chance,
+        "cloud_cover": cloud_now,
+        "sun_elevation": round(sun, 1),
+        "is_dark": dark,
+        "dark_window": window,
+        "moon_phase": round(moon, 1),
+        "bright_moon": bright_moon,
+        "station": station_info,
+    }
+
+
 # ---------------- Try it out ----------------
 if __name__ == "__main__":
     PLACE = "Reykjanesbaer"
@@ -182,50 +237,17 @@ if __name__ == "__main__":
         print("Try another place in Iceland")
     else:
         lat, lon = place
-
-        # Clouds: Open-Meteo forecast for the current hour
-        weather = get_weather(lat, lon)
-        hour = datetime.now(timezone.utc).hour  # Iceland time = UTC all year
-        cloud_now = weather["hourly"]["cloud_cover"][hour]
-
-        # Aurora: NOAA OVATION chance at our grid point
-        ovation = get_ovation()
-        chance = find_aurora_chance(lat, lon, ovation)
-
-        # Darkness: where the sun is now, and tonight's dark window
-        sun = get_sun_elevation(lat, lon)
-        dark = is_dark(sun)
-        window = get_dark_window(lat, lon)
-
-        # Moon: a bright moon washes out faint aurora
-        moon = get_moon_phase()
-        bright_moon = moon_is_bright(moon)
-
-        # Temperature and wind: nearest station that actually reports
-        stations = get_stations()
-        observations = get_latest_observations()
-        reporting = filter_reporting_stations(stations, observations)
-        station, distance = find_nearest_station(lat, lon, reporting)
-
-        if station is None:
-            obs = None
-        else:
-            obs = find_observation(station["station"], observations)
+        conditions = get_conditions(lat, lon)
 
         print(f"Right now in {PLACE}:")
-        print(f"  Aurora chance: {chance}%")
-        print(f"  Cloud: {cloud_now}%")
-        print(f"  Sun elevation: {sun:.1f}°")
-        print(f"  Dark enough: {dark}")
-        if window is None:
-            print("  No darkness tonight")
-        else:
-            start, end = window
-            print(f"  Dark tonight: {start:%H:%M} to {end:%H:%M}")
-        print(f"  Moon phase: {moon:.1f} (bright moon: {bright_moon})")
-        if obs is None:
+        print(f"  Aurora chance: {conditions['aurora_chance']}%")
+        print(f"  Cloud: {conditions['cloud_cover']}%")
+        print(f"  Dark enough: {conditions['is_dark']}")
+        station = conditions["station"]
+        if station is None:
             print("  No station measurements right now")
         else:
-            print(f"  Temperature: {obs['t']}°C")
-            print(f"  Wind: {obs['f']} m/s ({obs['d_txt']})")
-            print(f"  Measured at {station['name']}, {distance:.1f} km away")
+            print(f"  Temperature: {station['temperature']}°C at {station['name']}")
+            print(f"  Wind: {station['wind']} m/s ({station['wind_direction']})")
+
+
