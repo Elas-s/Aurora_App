@@ -10,6 +10,7 @@ from astral.sun import dawn, dusk, elevation
 
 # ---------------- URLs ----------------
 KP_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
+KP_FORECAST_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json"
 GEO_URL = "https://geocoding-api.open-meteo.com/v1/search"
 WEATHER_URL = "https://api.open-meteo.com/v1/forecast"
 STATIONS_URL = "https://api.vedur.is/weather/stations"
@@ -18,6 +19,7 @@ OVATION_URL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 
 # ---------------- Settings ----------------
 BRIGHT_MOON_FACTOR = 0.7  # moonlight hides faint aurora, not strong ones
+GREAT_KP = 5  # in Iceland, Kp 5+ is already a great night
 
 
 # ---------------- Helpers ----------------
@@ -30,8 +32,15 @@ def distance_km(lat1, lon1, lat2, lon2):
 
 # ---------------- Aurora (Kp) ----------------
 def get_kp():
-    """Fetch the last 7.5 days of Kp readings from NOAA."""
+    """Fetch the last 7 days of Kp readings from NOAA."""
     response = httpx.get(KP_URL, timeout=10)
+    response.raise_for_status()
+    return response.json()
+
+
+def get_kp_forecast():
+    """Fetch NOAA's Kp readings and forecast for the next 3 days."""
+    response = httpx.get(KP_FORECAST_URL, timeout=10)
     response.raise_for_status()
     return response.json()
 
@@ -40,6 +49,21 @@ def get_latest_kp(readings):
     """Return (time, Kp) of the newest reading."""
     latest = readings[-1]
     return latest["time_tag"], latest["Kp"]
+
+
+def find_kp(hour, forecast):
+    """Return the forecast Kp for the 3-hour slot that contains this hour."""
+    slot = hour.replace(hour=hour.hour // 3 * 3)  # 22:00 -> 21:00
+    label = slot.strftime("%Y-%m-%dT%H:00:00")  # same shape as NOAA's time_tag
+    for reading in forecast:
+        if reading["time_tag"] == label:
+            return reading["kp"]  # lowercase k in the forecast data!
+    return None
+
+
+def kp_to_factor(kp):
+    """Turn Kp (0-9) into a 0-1 aurora factor for Iceland."""
+    return min(kp / GREAT_KP, 1)
 
 
 # ---------------- Aurora map (OVATION) ----------------
@@ -122,13 +146,13 @@ def find_place(name):
 
 # ---------------- Weather forecast ----------------
 def get_weather(lat, lon):
-    """Fetch today's hourly forecast for one location."""
+    """Fetch the hourly forecast for today and tomorrow for one location."""
     settings = {
         "latitude": lat,
         "longitude": lon,
         "hourly": "cloud_cover,precipitation,snowfall,wind_gusts_10m",
         "timezone": "Atlantic/Reykjavik",
-        "forecast_days": 2, #night goes past midnight
+        "forecast_days": 2,  # the night goes past midnight
     }
     response = httpx.get(WEATHER_URL, params=settings, timeout=10)
     response.raise_for_status()
@@ -141,7 +165,6 @@ def find_cloud(hour, weather):
     times = weather["hourly"]["time"]
     i = times.index(label)
     return weather["hourly"]["cloud_cover"][i]
-
 
 
 # ---------------- Weather stations ----------------
@@ -272,12 +295,17 @@ if __name__ == "__main__":
     else:
         lat, lon = place
 
+        # Tonight, hour by hour
         weather = get_weather(lat, lon)
+        forecast = get_kp_forecast()
+        print(f"Tonight in {PLACE}:")
         for hour in get_dark_hours(get_dark_window(lat, lon)):
-            print(hour.strftime("%H:%M"), find_cloud(hour, weather), "%")
+            cloud = find_cloud(hour, weather)
+            kp = find_kp(hour, forecast)
+            print(f"  {hour.strftime('%H:%M')}  cloud {cloud}%  Kp {kp}")
 
+        # Right now
         conditions = get_conditions(lat, lon)
-
         print(f"Right now in {PLACE}:")
         print(f"  Aurora chance: {conditions['aurora_chance']}%")
         print(f"  Cloud: {conditions['cloud_cover']}%")
@@ -289,7 +317,3 @@ if __name__ == "__main__":
         else:
             print(f"  Temperature: {station['temperature']}°C at {station['name']}")
             print(f"  Wind: {station['wind']} m/s ({station['wind_direction']})")
-
-
-
-
