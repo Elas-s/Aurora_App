@@ -86,6 +86,17 @@ def get_dark_window(lat, lon):
     return start, end
 
 
+def get_dark_hours(window):
+    """Return every whole hour inside tonight's dark window."""
+    start, end = window
+    hour = start.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+    hours = []
+    while hour <= end:
+        hours.append(hour)
+        hour = hour + timedelta(hours=1)
+    return hours
+
+
 def get_moon_phase():
     """Return today's moon phase: 0 = new moon, 14 = full moon, 28 = new again."""
     return phase(date.today())
@@ -117,11 +128,20 @@ def get_weather(lat, lon):
         "longitude": lon,
         "hourly": "cloud_cover,precipitation,snowfall,wind_gusts_10m",
         "timezone": "Atlantic/Reykjavik",
-        "forecast_days": 1,
+        "forecast_days": 2, #night goes past midnight
     }
     response = httpx.get(WEATHER_URL, params=settings, timeout=10)
     response.raise_for_status()
     return response.json()
+
+
+def find_cloud(hour, weather):
+    """Return the forecast cloud cover (%) for one hour."""
+    label = hour.strftime("%Y-%m-%dT%H:00")  # same shape as Open-Meteo's times
+    times = weather["hourly"]["time"]
+    i = times.index(label)
+    return weather["hourly"]["cloud_cover"][i]
+
 
 
 # ---------------- Weather stations ----------------
@@ -251,6 +271,11 @@ if __name__ == "__main__":
         print("Try another place in Iceland")
     else:
         lat, lon = place
+
+        weather = get_weather(lat, lon)
+        for hour in get_dark_hours(get_dark_window(lat, lon)):
+            print(hour.strftime("%H:%M"), find_cloud(hour, weather), "%")
+
         conditions = get_conditions(lat, lon)
 
         print(f"Right now in {PLACE}:")
