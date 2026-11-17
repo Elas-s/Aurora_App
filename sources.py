@@ -16,6 +16,9 @@ STATIONS_URL = "https://api.vedur.is/weather/stations"
 OBSERVATIONS_URL = "https://api.vedur.is/weather/observations/aws/10min/latest"
 OVATION_URL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 
+# ---------------- Settings ----------------
+BRIGHT_MOON_FACTOR = 0.7  # moonlight hides faint aurora, not strong ones
+
 
 # ---------------- Helpers ----------------
 def distance_km(lat1, lon1, lat2, lon2):
@@ -170,6 +173,16 @@ def find_observation(station_id, observations):
     return None
 
 
+# ---------------- Chance score ----------------
+def calculate_score(aurora_chance, cloud_cover, is_dark, bright_moon):
+    """Return a 0-100 chance of actually seeing the aurora."""
+    aurora = aurora_chance / 100
+    clear_sky = (100 - cloud_cover) / 100
+    dark = 1 if is_dark else 0
+    moon = BRIGHT_MOON_FACTOR if bright_moon else 1
+    return round(aurora * clear_sky * dark * moon * 100)
+
+
 # ---------------- Everything at once ----------------
 def get_conditions(lat, lon):
     """Return all aurora conditions for one place as a dict."""
@@ -222,6 +235,7 @@ def get_conditions(lat, lon):
         "moon_phase": round(moon, 1),
         "bright_moon": bright_moon,
         "station": station_info,
+        "score": calculate_score(chance, cloud_now, dark, bright_moon),
     }
 
 
@@ -243,11 +257,14 @@ if __name__ == "__main__":
         print(f"  Aurora chance: {conditions['aurora_chance']}%")
         print(f"  Cloud: {conditions['cloud_cover']}%")
         print(f"  Dark enough: {conditions['is_dark']}")
+        print(f"  Chance right now: {conditions['score']}%")
         station = conditions["station"]
         if station is None:
             print("  No station measurements right now")
         else:
             print(f"  Temperature: {station['temperature']}°C at {station['name']}")
             print(f"  Wind: {station['wind']} m/s ({station['wind_direction']})")
+
+
 
 
