@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException
 
-from sources import find_place, get_conditions, find_best_hour, get_tonight
+from sources import find_place, get_conditions, find_best_hour, get_tonight, find_best_spot
+from spots import DARK_SPOTS
 
 app = FastAPI()
 
@@ -37,4 +38,6 @@ def tonight(place: str):
         raise HTTPException(status_code=404, detail=f"Couldn't find {place} in Iceland.")
     lat, lon = coordinates
     hours = get_tonight(lat, lon)
-    return {"hours": hours, "best": find_best_hour(hours)}
+    spot, spot_hour = find_best_spot(lat, lon, DARK_SPOTS)
+
+    return {"hours": hours, "best": find_best_hour(hours), "best_spot": {"spot": spot, "hour": spot_hour}}
