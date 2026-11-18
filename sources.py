@@ -1,7 +1,7 @@
-"""Fetch the data the aurora app needs from NOAA, Open-Meteo and the Icelandic Met Office."""
 
 from datetime import date, datetime, timedelta, timezone
 from math import asin, cos, radians, sin, sqrt
+from spots import DARK_SPOTS
 
 import httpx
 from astral import Observer
@@ -21,6 +21,7 @@ OVATION_URL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 BRIGHT_MOON_FACTOR = 0.7  # moonlight hides faint aurora, not strong ones
 GREAT_KP = 5  # in Iceland, Kp 5+ is already a great night
 
+MAX_SPOT_KM = 50  # don't send people on a long night drive
 
 # ---------------- Helpers ----------------
 def distance_km(lat1, lon1, lat2, lon2):
@@ -250,6 +251,14 @@ def find_best_hour(hours):
         if best is None or hour["score"] > best["score"]:
             best = hour
     return best
+#----------------------- Nearby Spot -------------------
+def find_nearby_spots(lat, lon, spots):
+    """Return the spots within MAX_SPOT_KM of (lat, lon)."""
+    nearby = []
+    for spot in spots:
+        if distance_km(lat, lon, spot["lat"], spot["lon"]) <= MAX_SPOT_KM:
+            nearby.append(spot)
+    return nearby
 
 # ---------------- Everything at once ----------------
 def get_conditions(lat, lon):
@@ -340,3 +349,6 @@ if __name__ == "__main__":
             tonight = get_tonight(lat, lon)
             best = find_best_hour(tonight)
             print(f"  Best time: {best['time']} ({best['score']}%)")
+
+            for spot in find_nearby_spots(lat, lon, DARK_SPOTS):
+                print("  Nearby:", spot["name"])
