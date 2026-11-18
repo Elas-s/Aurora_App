@@ -269,9 +269,10 @@ def find_nearby_spots(lat, lon, spots):
             nearby.append(spot)
     return nearby
 
-def find_best_spot(lat, lon, spots):
+def find_best_spot(lat, lon, spots, forecast=None):
     """Return (spot, best_hour) for the best nearby spot tonight, or (None, None)."""
-    forecast = get_kp_forecast()          # 📨 fetch Kp ONCE
+    if forecast is None:
+        forecast = get_kp_forecast()          # 📨 fetch Kp ONCE
     best_spot = None
     best_hour = None
     for spot in find_nearby_spots(lat, lon, spots):
