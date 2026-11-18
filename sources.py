@@ -243,6 +243,14 @@ def get_tonight(lat, lon):
         hours.append({"time": hour.strftime("%H:%M"), "cloud": cloud, "kp": kp, "score": score})
     return hours
 
+def find_best_hour(hours):
+    """Return the hour with the highest score, or None if there are no hours."""
+    best = None
+    for hour in hours:
+        if best is None or hour["score"] > best["score"]:
+            best = hour
+    return best
+
 # ---------------- Everything at once ----------------
 def get_conditions(lat, lon):
     """Return all aurora conditions for one place as a dict."""
@@ -328,3 +336,7 @@ if __name__ == "__main__":
             print(f"Tonight in {PLACE}:")
             for h in get_tonight(lat, lon):
                 print(f"  {h['time']}  cloud {h['cloud']}%  Kp {h['kp']}  score {h['score']}%")
+
+            tonight = get_tonight(lat, lon)
+            best = find_best_hour(tonight)
+            print(f"  Best time: {best['time']} ({best['score']}%)")
