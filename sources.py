@@ -269,6 +269,19 @@ def find_nearby_spots(lat, lon, spots):
             nearby.append(spot)
     return nearby
 
+def find_best_spot(lat, lon, spots):
+    """Return (spot, best_hour) for the best nearby spot tonight, or (None, None)."""
+    forecast = get_kp_forecast()          # 📨 fetch Kp ONCE
+    best_spot = None
+    best_hour = None
+    for spot in find_nearby_spots(lat, lon, spots):
+        hours = get_tonight(spot["lat"], spot["lon"], forecast)   # ♻️ reuse it
+        hour = find_best_hour(hours)
+        if hour is not None and (best_hour is None or hour["score"] > best_hour["score"]):
+            best_spot = spot
+            best_hour = hour
+    return best_spot, best_hour
+
 
 # ---------------- Everything at once ----------------
 def get_conditions(lat, lon):
@@ -364,6 +377,10 @@ if __name__ == "__main__":
         else:
             print(f"  Best time: {best['time']} ({best['score']}%)")
 
-        # Nearby dark spots
-        for spot in find_nearby_spots(lat, lon, DARK_SPOTS):
-            print("  Nearby:", spot["name"])
+        # Best nearby spot
+        spot, hour = find_best_spot(lat, lon, DARK_SPOTS)
+        if spot is None:
+            print("No good spot nearby tonight")
+        else:
+            print(f"It is advised to see the aurora at {spot['name']} around {hour['time']}.")
+            print(f"The clouds there are {hour['cloud']}% and your chance is {hour['score']}%.")
