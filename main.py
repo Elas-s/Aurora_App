@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 
-from sources import find_place, get_conditions, find_best_hour, get_tonight,
+from sources import find_place, get_conditions, find_best_hour, get_tonight
 
 app = FastAPI()
 

@@ -1,12 +1,14 @@
+"""Fetch the data the aurora app needs from NOAA, Open-Meteo and the Icelandic Met Office."""
 
 from datetime import date, datetime, timedelta, timezone
 from math import asin, cos, radians, sin, sqrt
-from spots import DARK_SPOTS
 
 import httpx
 from astral import Observer
 from astral.moon import phase
 from astral.sun import dawn, dusk, elevation
+
+from spots import DARK_SPOTS
 
 # ---------------- URLs ----------------
 KP_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
@@ -20,8 +22,8 @@ OVATION_URL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 # ---------------- Settings ----------------
 BRIGHT_MOON_FACTOR = 0.7  # moonlight hides faint aurora, not strong ones
 GREAT_KP = 5  # in Iceland, Kp 5+ is already a great night
-
 MAX_SPOT_KM = 50  # don't send people on a long night drive
+
 
 # ---------------- Helpers ----------------
 def distance_km(lat1, lon1, lat2, lon2):
@@ -227,13 +229,17 @@ def calculate_score(aurora_chance, cloud_cover, is_dark, bright_moon):
     return round(aurora * clear_sky * dark * moon * 100)
 
 
-def get_tonight(lat, lon):
-    """Return tonight's hour-by-hour scores, or [] when it never gets dark."""
+def get_tonight(lat, lon, forecast=None):
+    """Return tonight's hour-by-hour scores, or [] when it never gets dark.
+
+    Pass in a Kp forecast you already fetched to avoid fetching it again.
+    """
     window = get_dark_window(lat, lon)
     if window is None:
         return []
     weather = get_weather(lat, lon)
-    forecast = get_kp_forecast()
+    if forecast is None:
+        forecast = get_kp_forecast()
     bright_moon = moon_is_bright(get_moon_phase())
 
     hours = []
@@ -244,6 +250,7 @@ def get_tonight(lat, lon):
         hours.append({"time": hour.strftime("%H:%M"), "cloud": cloud, "kp": kp, "score": score})
     return hours
 
+
 def find_best_hour(hours):
     """Return the hour with the highest score, or None if there are no hours."""
     best = None
@@ -251,7 +258,9 @@ def find_best_hour(hours):
         if best is None or hour["score"] > best["score"]:
             best = hour
     return best
-#----------------------- Nearby Spot -------------------
+
+
+# ---------------- Nearby dark spots ----------------
 def find_nearby_spots(lat, lon, spots):
     """Return the spots within MAX_SPOT_KM of (lat, lon)."""
     nearby = []
@@ -259,6 +268,7 @@ def find_nearby_spots(lat, lon, spots):
         if distance_km(lat, lon, spot["lat"], spot["lon"]) <= MAX_SPOT_KM:
             nearby.append(spot)
     return nearby
+
 
 # ---------------- Everything at once ----------------
 def get_conditions(lat, lon):
@@ -342,13 +352,18 @@ if __name__ == "__main__":
         else:
             print(f"  Temperature: {station['temperature']}°C at {station['name']}")
             print(f"  Wind: {station['wind']} m/s ({station['wind_direction']})")
-            print(f"Tonight in {PLACE}:")
-            for h in get_tonight(lat, lon):
-                print(f"  {h['time']}  cloud {h['cloud']}%  Kp {h['kp']}  score {h['score']}%")
 
-            tonight = get_tonight(lat, lon)
-            best = find_best_hour(tonight)
+        # Tonight
+        tonight = get_tonight(lat, lon)
+        print(f"Tonight in {PLACE}:")
+        for h in tonight:
+            print(f"  {h['time']}  cloud {h['cloud']}%  Kp {h['kp']}  score {h['score']}%")
+        best = find_best_hour(tonight)
+        if best is None:
+            print("  It doesn't get dark enough tonight")
+        else:
             print(f"  Best time: {best['time']} ({best['score']}%)")
 
-            for spot in find_nearby_spots(lat, lon, DARK_SPOTS):
-                print("  Nearby:", spot["name"])
+        # Nearby dark spots
+        for spot in find_nearby_spots(lat, lon, DARK_SPOTS):
+            print("  Nearby:", spot["name"])
