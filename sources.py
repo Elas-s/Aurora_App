@@ -226,6 +226,23 @@ def calculate_score(aurora_chance, cloud_cover, is_dark, bright_moon):
     return round(aurora * clear_sky * dark * moon * 100)
 
 
+def get_tonight(lat, lon):
+    """Return tonight's hour-by-hour scores, or [] when it never gets dark."""
+    window = get_dark_window(lat, lon)
+    if window is None:
+        return []
+    weather = get_weather(lat, lon)
+    forecast = get_kp_forecast()
+    bright_moon = moon_is_bright(get_moon_phase())
+
+    hours = []
+    for hour in get_dark_hours(window):
+        cloud = find_cloud(hour, weather)
+        kp = find_kp(hour, forecast)
+        score = calculate_score(kp_to_factor(kp) * 100, cloud, True, bright_moon)
+        hours.append({"time": hour.strftime("%H:%M"), "cloud": cloud, "kp": kp, "score": score})
+    return hours
+
 # ---------------- Everything at once ----------------
 def get_conditions(lat, lon):
     """Return all aurora conditions for one place as a dict."""
@@ -295,15 +312,6 @@ if __name__ == "__main__":
     else:
         lat, lon = place
 
-        # Tonight, hour by hour
-        weather = get_weather(lat, lon)
-        forecast = get_kp_forecast()
-        print(f"Tonight in {PLACE}:")
-        for hour in get_dark_hours(get_dark_window(lat, lon)):
-            cloud = find_cloud(hour, weather)
-            kp = find_kp(hour, forecast)
-            print(f"  {hour.strftime('%H:%M')}  cloud {cloud}%  Kp {kp}")
-
         # Right now
         conditions = get_conditions(lat, lon)
         print(f"Right now in {PLACE}:")
@@ -317,3 +325,6 @@ if __name__ == "__main__":
         else:
             print(f"  Temperature: {station['temperature']}°C at {station['name']}")
             print(f"  Wind: {station['wind']} m/s ({station['wind_direction']})")
+            print(f"Tonight in {PLACE}:")
+            for h in get_tonight(lat, lon):
+                print(f"  {h['time']}  cloud {h['cloud']}%  Kp {h['kp']}  score {h['score']}%")
