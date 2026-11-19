@@ -9,6 +9,7 @@ from astral.moon import phase
 from astral.sun import dawn, dusk, elevation
 
 from spots import DARK_SPOTS
+from cache import read_note, write_note
 
 # ---------------- URLs ----------------
 KP_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
@@ -23,6 +24,8 @@ OVATION_URL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 BRIGHT_MOON_FACTOR = 0.7  # moonlight hides faint aurora, not strong ones
 GREAT_KP = 5  # in Iceland, Kp 5+ is already a great night
 MAX_SPOT_KM = 50  # don't send people on a long night drive
+KP_TTL_MINUTES = 15 # time to live for KP data
+WEATHER_TTL_MINUTES = 30 # time to live for Weather data
 
 
 # ---------------- Helpers ----------------
@@ -43,9 +46,15 @@ def get_kp():
 
 def get_kp_forecast():
     """Fetch NOAA's Kp readings and forecast for the next 3 days."""
+    data = read_note("kp_forecast", KP_TTL_MINUTES)
+    if data is not None:
+        return data      # 📝 fresh note, no request!
+
     response = httpx.get(KP_FORECAST_URL, timeout=10)
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    write_note("kp_forecast", data)     # 🧊 save it for next time
+    return data
 
 
 def get_latest_kp(readings):
@@ -149,7 +158,12 @@ def find_place(name):
 
 # ---------------- Weather forecast ----------------
 def get_weather(lat, lon):
-    """Fetch the hourly forecast for today and tomorrow for one location."""
+    """Fetch the hourly forecast for today and tomorrow for one location, reusing it for WEATHER_TTL_MINUTES."""
+    name = f"weather {lat} {lon}"
+    data = read_note(name, WEATHER_TTL_MINUTES)
+    if data is not None:
+        return data  # we still have fresh data
+
     settings = {
         "latitude": lat,
         "longitude": lon,
@@ -159,7 +173,9 @@ def get_weather(lat, lon):
     }
     response = httpx.get(WEATHER_URL, params=settings, timeout=10)
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    write_note(name, data)
+    return data
 
 
 def find_cloud(hour, weather):
