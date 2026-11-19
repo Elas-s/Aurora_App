@@ -34,6 +34,10 @@ OBSERVATIONS_TTL_MINUTES = 10  # stations report every 10 minutes
 STATIONS_TTL_MINUTES = 60 * 24  # the station list hardly ever changes
 PLACE_TTL_MINUTES = 60 * 24 * 7  # a week; places don't move
 
+WINDY_GUSTS = 15  # m/s: challenging, open car doors with both hands
+STORM_GUSTS = 20  # m/s: risk rises a lot, above 25 roads often close
+GREAT_SCORE = 50  # a wonderful night
+GOOD_SCORE = 20   # a real chance
 
 # ---------------- Helpers ----------------
 def distance_km(lat1, lon1, lat2, lon2):
@@ -190,6 +194,7 @@ def get_weather(lat, lon):
         "hourly": "cloud_cover,precipitation,snowfall,wind_gusts_10m",
         "timezone": "Atlantic/Reykjavik",
         "forecast_days": 2,  # the night goes past midnight
+        "wind_speed_unit": "ms",  # m/s, like Icelandic forecasts
     }
     response = httpx.get(WEATHER_URL, params=settings, timeout=10)
     response.raise_for_status()
@@ -198,12 +203,12 @@ def get_weather(lat, lon):
     return data
 
 
-def find_cloud(hour, weather):
-    """Return the forecast cloud cover (%) for one hour."""
+def find_value(hour, weather, field):
+    """Return one hourly forecast value (like cloud_cover) for one hour."""
     label = hour.strftime("%Y-%m-%dT%H:00")  # same shape as Open-Meteo's times
     times = weather["hourly"]["time"]
     i = times.index(label)
-    return weather["hourly"]["cloud_cover"][i]
+    return weather["hourly"][field][i]
 
 
 # ---------------- Weather stations ----------------
@@ -292,10 +297,14 @@ def get_tonight(lat, lon, forecast=None):
 
     hours = []
     for hour in get_dark_hours(window):
-        cloud = find_cloud(hour, weather)
+        cloud = find_value(hour, weather, "cloud_cover")
+        gusts = find_value(hour, weather, "wind_gusts_10m")
+        snow = find_value(hour, weather, "snowfall")
+        rain = find_value(hour, weather, "precipitation")
         kp = find_kp(hour, forecast)
         score = calculate_score(kp_to_factor(kp) * 100, cloud, True, bright_moon)
-        hours.append({"time": hour.strftime("%H:%M"), "cloud": cloud, "kp": kp, "score": score})
+        hours.append({"time": hour.strftime("%H:%M"), "cloud": cloud, "kp": kp, "score": score,
+                    "gusts": gusts, "snow": snow, "rain": rain})
     return hours
 
 
@@ -306,6 +315,38 @@ def find_best_hour(hours):
         if best is None or hour["score"] > best["score"]:
             best = hour
     return best
+# ------------------------ Tips ----------------------
+def get_tips(hour, bright_moon):
+    """Return a list of friendly tips for one hour of the night."""
+    tips = []
+
+    # 🌌 Your chance
+    if hour["score"] >= GREAT_SCORE:
+        tips.append(f"Tonight looks wonderful! Be outside around {hour['time']} and look up and north. 🌌")
+    elif hour["score"] >= GOOD_SCORE:
+        tips.append(f"There's a real chance around {hour['time']}. Give your eyes 15 minutes to get used to the dark. ✨")
+    else:
+        tips.append("The chance is low tonight, but the aurora loves surprises. Check again later! 💚")
+
+    # 🌬️ Wind
+    if hour["gusts"] >= STORM_GUSTS:
+        tips.append(f"Storm gusts of {hour['gusts']} m/s. Please stay safe and don't drive tonight. 🙏")
+    elif hour["gusts"] >= WINDY_GUSTS:
+        tips.append(f"Gusts of {hour['gusts']} m/s. Open your car door with both hands and be careful! 🚗")
+
+    # ❄️ Snow and 🌧️ rain
+    if hour["snow"] > 0:
+        tips.append("Snow is expected, so roads may be slippery. Drive slowly and check umferdin.is. ❄️")
+    elif hour["rain"] > 0:
+        tips.append("A little rain is on the way. A waterproof jacket will keep you happy. 🌧️")
+
+    # 🌙 Moon
+    if bright_moon:
+        tips.append("The moon is bright tonight, so faint aurora may hide. Look away from the moon. 🌙")
+
+    # 🧣 Always
+    tips.append("Dress warmer than you think, and bring a hot drink. 🧣☕")
+    return tips
 
 
 # ---------------- Nearby dark spots ----------------
