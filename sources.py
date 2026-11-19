@@ -7,10 +7,9 @@ import httpx
 from astral import Observer
 from astral.moon import phase
 from astral.sun import dawn, dusk, elevation
-from pydantic_extra_types import coordinate
 
-from spots import DARK_SPOTS
 from cache import read_note, write_note
+from spots import DARK_SPOTS
 
 # ---------------- URLs ----------------
 KP_URL = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
@@ -26,9 +25,14 @@ OVATION_URL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 BRIGHT_MOON_FACTOR = 0.7  # moonlight hides faint aurora, not strong ones
 GREAT_KP = 5  # in Iceland, Kp 5+ is already a great night
 MAX_SPOT_KM = 50  # don't send people on a long night drive
-KP_TTL_MINUTES = 15 # time to live for KP data
-WEATHER_TTL_MINUTES = 30 # time to live for Weather data
-PLACE_TTL_MINUTES = 60 * 24 * 7   # a week; places don't move
+
+# Cache: how long each saved answer stays fresh (TTL = time to live)
+KP_TTL_MINUTES = 15  # NOAA corrects the forecast often; don't miss a storm
+WEATHER_TTL_MINUTES = 30  # Open-Meteo updates about once an hour
+OVATION_TTL_MINUTES = 10  # the aurora map updates every few minutes
+OBSERVATIONS_TTL_MINUTES = 10  # stations report every 10 minutes
+STATIONS_TTL_MINUTES = 60 * 24  # the station list hardly ever changes
+PLACE_TTL_MINUTES = 60 * 24 * 7  # a week; places don't move
 
 
 # ---------------- Helpers ----------------
@@ -83,10 +87,16 @@ def kp_to_factor(kp):
 
 # ---------------- Aurora map (OVATION) ----------------
 def get_ovation():
-    """Fetch NOAA's latest aurora chance grid for the whole planet."""
+    """Fetch NOAA's aurora chance grid for the whole planet, reusing it for OVATION_TTL_MINUTES."""
+    data = read_note("ovation", OVATION_TTL_MINUTES)
+    if data is not None:
+        return data
+
     response = httpx.get(OVATION_URL, timeout=10)
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    write_note("ovation", data)
+    return data
 
 
 def find_aurora_chance(lat, lon, ovation):
@@ -198,18 +208,30 @@ def find_cloud(hour, weather):
 
 # ---------------- Weather stations ----------------
 def get_stations():
-    """Fetch all active automatic weather stations in Iceland."""
+    """Fetch all active automatic weather stations in Iceland, reusing them for STATIONS_TTL_MINUTES."""
+    data = read_note("stations", STATIONS_TTL_MINUTES)
+    if data is not None:
+        return data
+
     settings = {"active": "true", "station_type": "sj"}
     response = httpx.get(STATIONS_URL, params=settings, timeout=10)
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    write_note("stations", data)
+    return data
 
 
 def get_latest_observations():
-    """Fetch the latest 10-minute observation from every station."""
+    """Fetch the latest observation from every station, reusing them for OBSERVATIONS_TTL_MINUTES."""
+    data = read_note("observations", OBSERVATIONS_TTL_MINUTES)
+    if data is not None:
+        return data
+
     response = httpx.get(OBSERVATIONS_URL, timeout=10)
     response.raise_for_status()
-    return response.json()
+    data = response.json()
+    write_note("observations", data)
+    return data
 
 
 def filter_reporting_stations(stations, observations):
@@ -294,6 +316,7 @@ def find_nearby_spots(lat, lon, spots):
         if distance_km(lat, lon, spot["lat"], spot["lon"]) <= MAX_SPOT_KM:
             nearby.append(spot)
     return nearby
+
 
 def find_best_spot(lat, lon, spots, forecast=None):
     """Return (spot, best_hour) for the best nearby spot tonight, or (None, None)."""
