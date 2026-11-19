@@ -7,6 +7,7 @@ import httpx
 from astral import Observer
 from astral.moon import phase
 from astral.sun import dawn, dusk, elevation
+from pydantic_extra_types import coordinate
 
 from spots import DARK_SPOTS
 from cache import read_note, write_note
@@ -20,12 +21,14 @@ STATIONS_URL = "https://api.vedur.is/weather/stations"
 OBSERVATIONS_URL = "https://api.vedur.is/weather/observations/aws/10min/latest"
 OVATION_URL = "https://services.swpc.noaa.gov/json/ovation_aurora_latest.json"
 
+
 # ---------------- Settings ----------------
 BRIGHT_MOON_FACTOR = 0.7  # moonlight hides faint aurora, not strong ones
 GREAT_KP = 5  # in Iceland, Kp 5+ is already a great night
 MAX_SPOT_KM = 50  # don't send people on a long night drive
 KP_TTL_MINUTES = 15 # time to live for KP data
 WEATHER_TTL_MINUTES = 30 # time to live for Weather data
+PLACE_TTL_MINUTES = 60 * 24 * 7   # a week; places don't move
 
 
 # ---------------- Helpers ----------------
@@ -146,6 +149,11 @@ def moon_is_bright(moon_phase):
 # ---------------- Place -> coordinates ----------------
 def find_place(name):
     """Turn a place name in Iceland into (lat, lon), or None if not found."""
+    note_name = f"place {name.lower()}"
+    coordinates = read_note(note_name, PLACE_TTL_MINUTES)
+    if coordinates is not None:
+        return coordinates
+
     settings = {"name": name, "count": 1, "countryCode": "IS"}
     response = httpx.get(GEO_URL, params=settings, timeout=10)
     response.raise_for_status()
@@ -153,7 +161,9 @@ def find_place(name):
     if "results" not in data:
         return None
     place = data["results"][0]
-    return place["latitude"], place["longitude"]
+    coordinates = place["latitude"], place["longitude"]
+    write_note(note_name, coordinates)
+    return coordinates
 
 
 # ---------------- Weather forecast ----------------
