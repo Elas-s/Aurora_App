@@ -172,7 +172,7 @@ def find_place(name):
     response = httpx.get(GEO_URL, params=settings, timeout=10)
     response.raise_for_status()
     data = response.json()
-    if "results" not in data:
+    if not data.get("results"):
         return None
     place = data["results"][0]
     coordinates = place["latitude"], place["longitude"]
