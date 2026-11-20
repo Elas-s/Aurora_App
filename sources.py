@@ -316,6 +316,7 @@ def find_best_hour(hours):
             best = hour
     return best
 # ------------------------ Tips ----------------------
+
 def get_tips(hour, bright_moon):
     """Return a list of friendly tips for one hour of the night."""
     tips = []
@@ -347,7 +348,6 @@ def get_tips(hour, bright_moon):
     # 🧣 Always
     tips.append("Dress warmer than you think, and bring a hot drink. 🧣☕")
     return tips
-
 
 # ---------------- Nearby dark spots ----------------
 def find_nearby_spots(lat, lon, spots):

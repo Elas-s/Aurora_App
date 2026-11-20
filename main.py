@@ -44,14 +44,20 @@ def tonight(place: str):
     spot, spot_hour = find_best_spot(lat, lon, DARK_SPOTS, forecast)
     bright_moon = moon_is_bright(get_moon_phase())
 
-    if spot_hour is None:
-        tips = []  # summer, or no dark spot nearby: nothing to advise
+    best = find_best_hour(hours)
+    if best is None:
+        tips = []  # summer: no dark hours, nothing to advise
     else:
-        tips = get_tips(spot_hour, bright_moon)
+        tips = get_tips(best, bright_moon)
+        if spot_hour is not None and spot_hour["score"] > best["score"]:
+            tips.append(
+                f"🔭 Even better: {spot['name']} at {spot_hour['time']} "
+                f"(score {spot_hour['score']})."
+            )
 
     return {
         "hours": hours,
-        "best": find_best_hour(hours),
+        "best": best,
         "best_spot": {"spot": spot, "hour": spot_hour},
         "tips": tips,
     }
