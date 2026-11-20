@@ -1,0 +1,11 @@
+name: tests
+on: push          #run when I push
+
+jobs:
+  test:
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v4                 # get the code
+      - uses: astral-sh/setup-uv@v6              # install uv
+      - run: uv sync                              # install packages
+      - run: uv run pytest                        # run the tests
